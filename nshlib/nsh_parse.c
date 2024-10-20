@@ -287,28 +287,32 @@ static int nsh_parse_command(FAR struct nsh_vtbl_s *vtbl, FAR char *cmdline);
  * Private Data
  ****************************************************************************/
 
-static const char g_token_separator[] = " \t\n";
-static const char g_quote_separator[] = "'\"`";
+static const char   g_token_separator[] = " \t\n";
+static const char   g_quote_separator[] = "'\"`";
 #ifndef NSH_DISABLE_SEMICOLON
-static const char g_line_separator[]  = "\"'#;\n";
+static const char   g_line_separator[]  = "\"'#;\n";
 #endif
 #ifdef CONFIG_NSH_ARGCAT
-static const char g_arg_separator[]   = "`$";
+static const char   g_arg_separator[]   = "`$";
 #endif
-static const char g_redirect_out1[]   = ">";
-static const char g_redirect_out2[]  = ">>";
-static const char g_redirect_in1[]   = "<";
+static const char   g_redirect_out1[]   = ">";
+static const size_t g_redirect_out1_len = sizeof(g_redirect_out1) - 1;
+static const char   g_redirect_out2[]   = ">>";
+static const size_t g_redirect_out2_len = sizeof(g_redirect_out2) - 1;
+static const char   g_redirect_in1[]    = "<";
+static const size_t g_redirect_in1_len  = sizeof(g_redirect_in1) - 1;
 #ifdef CONFIG_NSH_PIPELINE
-static const char g_pipeline1[]       = "|";
+static const char   g_pipeline1[]       = "|";
+static const size_t g_pipeline1_len     = sizeof(g_pipeline1) - 1;
 #endif
 #ifdef NSH_HAVE_VARS
-static const char g_exitstatus[]      = "?";
-static const char g_lastpid[]         = "!";
-static const char g_success[]         = "0";
-static const char g_failure[]         = "1";
+static const char   g_exitstatus[]      = "?";
+static const char   g_lastpid[]         = "!";
+static const char   g_success[]         = "0";
+static const char   g_failure[]         = "1";
 #endif
 #ifdef NEED_NULLSTRING
-static const char g_nullstring[]      = "";
+static const char   g_nullstring[]      = "";
 #endif
 
 /****************************************************************************
@@ -2658,13 +2662,7 @@ static int nsh_parse_command(FAR struct nsh_vtbl_s *vtbl, FAR char *cmdline)
   int       argc;
   int       ret = ERROR;
   bool      redirect_out_save = false;
-  bool      redirect_in_save = false;
-  size_t redirect_out1_len = strlen(g_redirect_out1);
-  size_t redirect_out2_len = strlen(g_redirect_out2);
-  size_t redirect_in1_len = strlen(g_redirect_in1);
-#ifdef CONFIG_NSH_PIPELINE
-  size_t pipeline1_len = strlen(g_pipeline1);
-#endif
+  bool      redirect_in_save  = false;
 
 #ifdef CONFIG_SCHED_INSTRUMENTATION_DUMP
   char      tracebuf[CONFIG_NSH_LINELEN + 1];
@@ -2827,12 +2825,12 @@ static int nsh_parse_command(FAR struct nsh_vtbl_s *vtbl, FAR char *cmdline)
             }
         }
 
-      if (!strncmp(argv[argc], g_redirect_out2, redirect_out2_len))
+      if (!strncmp(argv[argc], g_redirect_out2, g_redirect_out2_len))
         {
           FAR char *arg;
-          if (argv[argc][redirect_out2_len])
+          if (argv[argc][g_redirect_out2_len])
             {
-              arg = &argv[argc][redirect_out2_len];
+              arg = &argv[argc][g_redirect_out2_len];
             }
           else
             {
@@ -2851,12 +2849,12 @@ static int nsh_parse_command(FAR struct nsh_vtbl_s *vtbl, FAR char *cmdline)
           param.oflags_out      = O_WRONLY | O_CREAT | O_APPEND;
           param.file_out        = nsh_getfullpath(vtbl, arg);
         }
-      else if (!strncmp(argv[argc], g_redirect_out1, redirect_out1_len))
+      else if (!strncmp(argv[argc], g_redirect_out1, g_redirect_out1_len))
         {
           FAR char *arg;
-          if (argv[argc][redirect_out1_len])
+          if (argv[argc][g_redirect_out1_len])
             {
-              arg = &argv[argc][redirect_out1_len];
+              arg = &argv[argc][g_redirect_out1_len];
             }
           else
             {
@@ -2875,12 +2873,12 @@ static int nsh_parse_command(FAR struct nsh_vtbl_s *vtbl, FAR char *cmdline)
           param.oflags_out      = O_WRONLY | O_CREAT | O_TRUNC;
           param.file_out        = nsh_getfullpath(vtbl, arg);
         }
-      else if (!strncmp(argv[argc], g_redirect_in1, redirect_in1_len))
+      else if (!strncmp(argv[argc], g_redirect_in1, g_redirect_in1_len))
         {
           FAR char *arg;
-          if (argv[argc][redirect_in1_len])
+          if (argv[argc][g_redirect_in1_len])
             {
-              arg = &argv[argc][redirect_in1_len];
+              arg = &argv[argc][g_redirect_in1_len];
             }
           else
             {
@@ -2900,12 +2898,12 @@ static int nsh_parse_command(FAR struct nsh_vtbl_s *vtbl, FAR char *cmdline)
           param.file_in         = nsh_getfullpath(vtbl, arg);
         }
 #ifdef CONFIG_NSH_PIPELINE
-      else if (!strncmp(argv[argc], g_pipeline1, pipeline1_len))
+      else if (!strncmp(argv[argc], g_pipeline1, g_pipeline1_len))
         {
           FAR char *arg;
-          if (argv[argc][pipeline1_len])
+          if (argv[argc][g_pipeline1_len])
             {
-              arg = &argv[argc][pipeline1_len];
+              arg = &argv[argc][g_pipeline1_len];
             }
           else
             {
