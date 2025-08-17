@@ -42,6 +42,19 @@
 #include "nsh_console.h"
 
 /****************************************************************************
+ * Private Data
+ ****************************************************************************/
+
+#if defined(CONFIG_NSH_READLINE) && defined(CONFIG_READLINE_TABCOMPLETION) && \
+    defined(CONFIG_READLINE_HAVE_EXTMATCH)
+static const struct extmatch_vtable_s g_nsh_extmatch =
+{
+  nsh_extmatch_count,  /* count_matches */
+  nsh_extmatch_getname /* getname */
+};
+#endif
+
+/****************************************************************************
  * Public Functions
  ****************************************************************************/
 
@@ -185,6 +198,22 @@ int nsh_session(FAR struct console_stdio_s *pstate,
           tcsetattr(INFD(pstate), TCSANOW, &cfg);
         }
     }
+#endif
+
+  /* populate NSH prompt string */
+
+  nsh_update_prompt();
+
+#if defined(CONFIG_NSH_READLINE) && defined(CONFIG_READLINE_TABCOMPLETION)
+  /* Configure readline prompt */
+
+  readline_prompt(nsh_prompt());
+
+#  ifdef CONFIG_READLINE_HAVE_EXTMATCH
+  /* Set up for tab completion on NSH commands */
+
+  readline_extmatch(&g_nsh_extmatch);
+#  endif
 #endif
 
   /* Then enter the command line parsing loop */
