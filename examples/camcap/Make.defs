@@ -1,0 +1,3 @@
+ifneq ($(CONFIG_EXAMPLES_CAMCAP),)
+CONFIGURED_APPS += $(APPDIR)/examples/camcap
+endif

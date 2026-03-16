@@ -1,0 +1,22 @@
+config EXAMPLES_CAMCAP
+	tristate "Simple camera capture"
+	default n
+	depends on DRIVERS_VIDEO
+	---help---
+		Capture one RGB565 frame and save to /tmp/cap.rgb
+
+if EXAMPLES_CAMCAP
+
+config EXAMPLES_CAMCAP_PROGNAME
+	string "Program name"
+	default "camcap"
+
+config EXAMPLES_CAMCAP_PRIORITY
+	int "Task priority"
+	default 100
+
+config EXAMPLES_CAMCAP_STACKSIZE
+	int "Stack size"
+	default 4096
+
+endif
