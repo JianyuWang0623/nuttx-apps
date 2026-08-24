@@ -38,4 +38,35 @@ if(CONFIG_SYSTEM_NXINIT)
     SRCS
     ${CSRCS})
 
+  if(CONFIG_SYSTEM_NXINIT_TEST)
+
+    # NxInit unit tests (cmocka), reusing the same parser/action/service
+    # sources built above.
+
+    set(TEST_SRCS
+        action.c
+        parser.c
+        service.c
+        test/test_nxinit.c
+        test/test_nxinit_common.c
+        test/test_nxinit_parser.c
+        test/test_nxinit_action.c
+        test/test_nxinit_service.c)
+
+    nuttx_add_application(
+      NAME
+      nxinit_unit_test
+      PRIORITY
+      ${CONFIG_SYSTEM_NXINIT_TEST_PRIORITY}
+      STACKSIZE
+      ${CONFIG_SYSTEM_NXINIT_TEST_STACKSIZE}
+      MODULE
+      ${CONFIG_SYSTEM_NXINIT}
+      DEPENDS
+      cmocka
+      SRCS
+      ${TEST_SRCS})
+
+  endif()
+
 endif()

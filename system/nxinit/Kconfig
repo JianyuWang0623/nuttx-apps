@@ -110,6 +110,30 @@ config SYSTEM_NXINIT_SERVICE_RESTART_PERIOD
 	int "Service restart period in ms"
 	default 5000
 
+comment "NXInit Testing"
+
+config SYSTEM_NXINIT_TEST
+	bool "NxInit unit tests"
+	default n
+	depends on TESTING_CMOCKA
+	---help---
+		Enable cmocka-based unit tests covering NxInit's argument/config
+		parser, action event matching, and service conflict detection.
+		Builds a separate "nxinit_unit_test" program; does not affect the
+		"init" program itself.
+
+if SYSTEM_NXINIT_TEST
+
+config SYSTEM_NXINIT_TEST_PRIORITY
+	int "Test task priority"
+	default 100
+
+config SYSTEM_NXINIT_TEST_STACKSIZE
+	int "Test task stack size"
+	default DEFAULT_TASK_STACKSIZE
+
+endif # SYSTEM_NXINIT_TEST
+
 comment "NXInit Log level"
 
 config SYSTEM_NXINIT_ERR
