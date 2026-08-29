@@ -43,6 +43,7 @@
 #include <unistd.h>
 
 #include <netinet/in.h>
+#include <poll.h>
 #include <sys/boardctl.h>
 #include <sys/epoll.h>
 #include <sys/ioctl.h>
@@ -92,6 +93,10 @@
 #define FASTBOOT_TCP_HANDSHAKE      "FB01"
 #define FASTBOOT_TCP_HANDSHAKE_LEN  4
 #define FASTBOOT_TCP_PORT           5554
+
+/* Bounded poll wait for a partial framed-read header on a non-blocking fd. */
+
+#define FASTBOOT_FRAME_POLL_MS      5000
 
 #define fb_info(...)                syslog(LOG_INFO, ##__VA_ARGS__);
 #define fb_err(...)                 syslog(LOG_ERR, ##__VA_ARGS__);
@@ -1340,12 +1345,33 @@ static ssize_t fastboot_read_all(int fd, FAR void *buf, size_t len)
   while (len > 0)
     {
       nread = fastboot_read(fd, buf, len);
-      if (nread <= 0)
+      if (nread < 0)
         {
-          if (total == 0)
+          /* Non-blocking fd: don't drop bytes already read on EAGAIN,
+           * wait for the rest instead.
+           */
+
+          if (errno == EAGAIN || errno == EINTR)
             {
-              return nread;
+              struct pollfd pfd;
+
+              pfd.fd     = fd;
+              pfd.events = POLLIN;
+
+              if (poll(&pfd, 1, FASTBOOT_FRAME_POLL_MS) <= 0)
+                {
+                  return total > 0 ? (ssize_t)total : -ETIMEDOUT;
+                }
+
+              continue;
             }
+
+          return total > 0 ? (ssize_t)total : nread;
+        }
+
+      if (nread == 0)
+        {
+          /* Peer closed the connection */
 
           break;
         }
@@ -1415,7 +1441,19 @@ static ssize_t fastboot_framed_read(FAR struct fastboot_ctx_s *ctx,
     }
 
   nread = fastboot_read(fd, buf, len);
-  if (nread <= 0)
+  if (nread < 0)
+    {
+      /* EAGAIN: keep ctx->left so the caller retries the same frame. */
+
+      if (errno != EAGAIN && errno != EINTR)
+        {
+          ctx->left = 0;
+        }
+
+      return nread;
+    }
+
+  if (nread == 0)
     {
       ctx->left = 0;
       return nread;
@@ -1549,7 +1587,6 @@ static int fastboot_serial_initialize(FAR struct fastboot_ctx_s *ctx)
 
   ctx->tran_fd[0] = fd;
   ctx->tran_fd[1] = fd;
-  fb_info("serial: opened %s\n", CONFIG_SYSTEM_FASTBOOTD_SERIAL_PORT);
   return 0;
 }
 
