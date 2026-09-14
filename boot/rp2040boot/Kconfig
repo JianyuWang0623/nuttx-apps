@@ -1,0 +1,73 @@
+#
+# For a description of the syntax of this configuration file,
+# see the file kconfig-language.txt in the NuttX tools repository.
+#
+
+menuconfig BOOT_RP2040BOOT
+	bool "RP2040 ELF bootloader"
+	default n
+	depends on ARCH_CHIP_RP2040
+	select BOARDCTL
+	select RP2040_BOOT_ELF
+	---help---
+		Enable support for the RP2040 ELF bootloader.  This bootloader
+		uses libelf to load an ET_EXEC ELF application image into SRAM
+		and jump to it.
+
+if BOOT_RP2040BOOT
+
+config BOOT_RP2040BOOT_ELF_PATH
+	string "Path to the AP ELF binary"
+	default "/dev/ap0"
+	---help---
+		Path to the application processor ELF binary to load.
+		For raw partition: /dev/ap0 (MTD character device).
+		Default: /dev/ap0
+
+config BOOT_RP2040BOOT_AP_BASE
+	hex "AP SRAM base address"
+	default 0x20007800
+	---help---
+		The base address where the application processor image will
+		be loaded in SRAM.  This must match the ORIGIN in the AP
+		linker script (raspberrypi-pico-sram-ap.ld).  The region
+		below this address is reserved for the bootloader.
+		Default: 0x20007800
+
+config BOOT_RP2040BOOT_PRIORITY
+	int "RP2040 boot task priority"
+	default 100
+	---help---
+		The priority of the RP2040 boot task.  Default: 100
+
+config BOOT_RP2040BOOT_STACKSIZE
+	int "RP2040 boot task stack size"
+	default 4096
+	---help---
+		The stack size of the RP2040 boot task.  Default: 4096
+
+config BOOT_RP2040BOOT_JUMP_DELAY_MS
+	int "Delay before jumping to AP (ms)"
+	default 3000
+	---help---
+		Delay in milliseconds before jumping to the AP image.
+		This allows CDC console output (e.g. MSP/Reset values)
+		to be flushed before the USB controller is reset during
+		the jump.  Set to 0 to disable.  Default: 3000
+
+config BOOT_RP2040BOOT_RESET_USB_BOOT
+	bool "Reboot to BOOTSEL instead of jumping (debug)"
+	default n
+	depends on BOARDCTL
+	select BOARDCTL_RESET
+	---help---
+		When enabled, the bootloader reboots into USB BOOTSEL
+		(download) mode instead of jumping to the AP image.
+		The same recovery is also triggered on any ELF load
+		error, so the board auto-recovers to BOOTSEL without
+		requiring a physical button press.
+		Use this for debug recovery when the AP image causes
+		the board to disappear from USB (e.g. AP resets USB
+		but doesn't bring it back up).  Default: n
+
+endif # BOOT_RP2040BOOT
