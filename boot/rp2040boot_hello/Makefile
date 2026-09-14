@@ -1,0 +1,12 @@
+include $(APPDIR)/Make.defs
+
+# rp2040boot_hello
+
+PROGNAME  = rp2040boot_hello
+PRIORITY  = $(CONFIG_BOOT_RP2040BOOT_HELLO_PRIORITY)
+STACKSIZE = $(CONFIG_BOOT_RP2040BOOT_HELLO_STACKSIZE)
+MODULE    = $(CONFIG_BOOT_RP2040BOOT_HELLO)
+
+MAINSRC = rp2040boot_hello_main.c
+
+include $(APPDIR)/Application.mk

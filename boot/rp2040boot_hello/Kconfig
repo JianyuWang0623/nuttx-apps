@@ -1,0 +1,19 @@
+config BOOT_RP2040BOOT_HELLO
+	bool "RP2040 bootloader hello demo"
+	default n
+	depends on ARCH_CHIP_RP2040
+	---help---
+		Minimal AP demo that waits for host DTE before printing.
+		Used to demonstrate the bootloader → AP jump chain.
+
+if BOOT_RP2040BOOT_HELLO
+
+config BOOT_RP2040BOOT_HELLO_PRIORITY
+	int "rp2040boot_hello task priority"
+	default 100
+
+config BOOT_RP2040BOOT_HELLO_STACKSIZE
+	int "rp2040boot_hello stack size"
+	default 2048
+
+endif # BOOT_RP2040BOOT_HELLO
