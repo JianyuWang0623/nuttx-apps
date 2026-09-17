@@ -33,6 +33,7 @@
 #include <fcntl.h>
 #include <elf.h>
 #include <inttypes.h>
+#include <string.h>
 #include <unistd.h>
 #include <sys/ioctl.h>
 #include <sys/boardctl.h>
@@ -51,6 +52,7 @@
 /* RP2040 SRAM end address */
 
 #define RP2040_SRAM_END  0x20042000
+#define RP2040_SRAM_BASE 0x20000000
 
 /****************************************************************************
  * External Functions
@@ -131,10 +133,10 @@ static int verify_phdr(FAR Elf_Phdr *phdr)
       return -EINVAL;
     }
 
-  /* Check LMA (p_paddr) is within SRAM and does not overlap bootloader */
+  /* Check that the LMA (p_paddr) is within SRAM. */
 
   load_end = phdr->p_paddr + phdr->p_memsz;
-  if (phdr->p_paddr < CONFIG_BOOT_RP2040BOOT_AP_BASE ||
+  if (phdr->p_paddr < RP2040_SRAM_BASE ||
       load_end > RP2040_SRAM_END)
     {
       syslog(LOG_ERR, "LMA range 0x%" PRIx32 "-0x%" PRIx32
@@ -166,6 +168,7 @@ static int verify_phdr(FAR Elf_Phdr *phdr)
 int main(int argc, FAR char *argv[])
 {
   struct mod_loadinfo_s loadinfo;
+  struct module_s mod;
   FAR Elf_Phdr *phdr = NULL;
   size_t phdrsize;
   uintptr_t vt_addr;
@@ -269,9 +272,9 @@ int main(int argc, FAR char *argv[])
          (size_t)loadinfo.filelen,
          (unsigned)loadinfo.ehdr.e_phnum);
 
-  if (loadinfo.ehdr.e_type != ET_EXEC)
+  if (loadinfo.ehdr.e_type != ET_EXEC && loadinfo.ehdr.e_type != ET_DYN)
     {
-      syslog(LOG_ERR, "Not ET_EXEC (type=%d)\n", loadinfo.ehdr.e_type);
+      syslog(LOG_ERR, "Not ET_EXEC/ET_DYN (type=%d)\n", loadinfo.ehdr.e_type);
       ret = -ENOEXEC;
       goto errout;
     }
@@ -336,11 +339,7 @@ int main(int argc, FAR char *argv[])
   free(phdr);
   phdr = NULL;
 
-  /* Step 3: Load ELF segments.  With LOADTO_LMA, segments land at
-   * p_paddr.  We skip libelf_bind() -- ET_EXEC has no relocations.
-   * libelf_load() calls libelf_loadhdrs() internally to read both
-   * shdr and phdr into loadinfo.
-   */
+  /* Step 3: Load and relocate the ELF before reading its vector table. */
 
   ret = libelf_load(&loadinfo);
   if (ret < 0)
@@ -351,6 +350,14 @@ int main(int argc, FAR char *argv[])
 
   syslog(LOG_INFO, "libelf_load OK: ret=%d\n", ret);
 
+  memset(&mod, 0, sizeof(mod));
+  ret = libelf_bind(&mod, &loadinfo, NULL, 0);
+  if (ret < 0)
+    {
+      syslog(LOG_ERR, "libelf_bind failed: %d\n", ret);
+      goto errout;
+    }
+
   /* Step 4: Read vector table from loaded image.
    * With LOADTO_LMA, libelf_load() places segments at p_paddr.
    * The ld script places .vectors at the start of .text, so
@@ -358,7 +365,7 @@ int main(int argc, FAR char *argv[])
    * We do NOT use loadinfo.textalloc which is 0 under LOADTO_LMA.
    */
 
-  vt_addr = CONFIG_BOOT_RP2040BOOT_AP_BASE;
+  vt_addr = loadinfo.textalloc;
 
   msp   = *(FAR uint32_t *)vt_addr;
   reset = *(FAR uint32_t *)(vt_addr + 4);
