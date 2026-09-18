@@ -133,15 +133,20 @@ static int verify_phdr(FAR Elf_Phdr *phdr)
       return -EINVAL;
     }
 
-  /* Check that the LMA (p_paddr) is within SRAM. */
+  /* Check that the LMA (p_paddr) is within AP-owned SRAM.
+   * AP memory starts at CONFIG_BOOT_RP2040BOOT_AP_BASE; everything below
+   * that belongs to the bootloader and must not be overwritten.
+   */
 
   load_end = phdr->p_paddr + phdr->p_memsz;
-  if (phdr->p_paddr < RP2040_SRAM_BASE ||
+  if (phdr->p_paddr < CONFIG_BOOT_RP2040BOOT_AP_BASE ||
       load_end > RP2040_SRAM_END)
     {
       syslog(LOG_ERR, "LMA range 0x%" PRIx32 "-0x%" PRIx32
-             " outside AP SRAM\n",
-             (uint32_t)phdr->p_paddr, (uint32_t)load_end);
+             " outside AP SRAM [0x%" PRIx32 "-0x%" PRIx32 "]\n",
+             (uint32_t)phdr->p_paddr, (uint32_t)load_end,
+             (uint32_t)CONFIG_BOOT_RP2040BOOT_AP_BASE,
+             (uint32_t)RP2040_SRAM_END);
       return -EINVAL;
     }
 
@@ -359,13 +364,24 @@ int main(int argc, FAR char *argv[])
     }
 
   /* Step 4: Read vector table from loaded image.
-   * With LOADTO_LMA, libelf_load() places segments at p_paddr.
-   * The ld script places .vectors at the start of .text, so
-   * _vectors is at CONFIG_BOOT_RP2040BOOT_AP_BASE.
-   * We do NOT use loadinfo.textalloc which is 0 under LOADTO_LMA.
+   * With PIE, the linker script places dynamic metadata (.dynsym, .dynstr,
+   * .hash, .rel.dyn) before .text in the RX PT_LOAD, so textalloc points
+   * to those sections, not _vectors.  Look up the _vectors symbol and
+   * convert its link-time VMA to the runtime LMA.
    */
 
-  vt_addr = loadinfo.textalloc;
+  {
+    Elf_Sym vsym;
+
+    ret = libelf_findsymbol(&loadinfo, "_vectors", &vsym);
+    if (ret < 0)
+      {
+        syslog(LOG_ERR, "Failed to find _vectors symbol: %d\n", ret);
+        goto errout;
+      }
+
+    vt_addr = libelf_addr(&loadinfo, vsym.st_value);
+  }
 
   msp   = *(FAR uint32_t *)vt_addr;
   reset = *(FAR uint32_t *)(vt_addr + 4);
