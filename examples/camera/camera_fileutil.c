@@ -62,17 +62,23 @@ FAR const char *futil_initialize(void)
   struct stat stat_buf;
 
   /* In SD card is available, use SD card.
-   * Otherwise, use SPI flash.
+   * Otherwise, use SPI flash if mounted, falling back to /tmp (tmpfs)
+   * when neither persistent storage is present (e.g. esp32s3-xiao
+   * camera bring-up, which has no SD card or SPI flash filesystem).
    */
 
   ret = stat("/mnt/sd0", &stat_buf);
-  if (ret < 0)
+  if (ret == 0)
+    {
+      g_save_dir = "/mnt/sd0";
+    }
+  else if (stat("/mnt/spif", &stat_buf) == 0)
     {
       g_save_dir = "/mnt/spif";
     }
   else
     {
-      g_save_dir = "/mnt/sd0";
+      g_save_dir = "/tmp";
     }
 
   return g_save_dir;
