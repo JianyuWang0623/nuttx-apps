@@ -159,6 +159,12 @@ static int nxcamera_cmd_stream(FAR struct nxcamera_s *pcam, FAR char *parg)
       0
     };
 
+  if (parg == NULL)
+    {
+      printf("stream: missing arguments (width height framerate format)\n");
+      return -EINVAL;
+    }
+
   sscanf(parg, "%"SCNu16" %"SCNu16" %"SCNu32" %4s",
                 &width, &height, &framerate, cc);
   format = v4l2_fourcc(cc[0], cc[1], cc[2], cc[3]);
@@ -226,6 +232,12 @@ static int nxcamera_cmd_input(FAR struct nxcamera_s *pcam, FAR char *parg)
   int  ret;
   char path[PATH_MAX];
 
+  if (parg == NULL)
+    {
+      printf("input: missing videodev argument\n");
+      return -EINVAL;
+    }
+
   /* First try to open the file directly */
 
   ret = nxcamera_setdevice(pcam, parg);
@@ -270,6 +282,12 @@ static int nxcamera_cmd_output(FAR struct nxcamera_s *pcam, FAR char *parg)
   char     path[PATH_MAX];
   FAR char *ext;
   bool     isimage = false;
+
+  if (parg == NULL)
+    {
+      printf("output: missing fbdev|filename argument\n");
+      return -EINVAL;
+    }
 
   /* First try to open the device directly */
 
