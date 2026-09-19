@@ -504,6 +504,7 @@ int main(int argc, FAR char *argv[])
   uint16_t w;
   uint16_t h;
   int is_eternal;
+  bool skip_stillcapture = false;
   int app_state;
 
   struct timeval start;
@@ -601,7 +602,15 @@ int main(int argc, FAR char *argv[])
        */
 
       sensor = get_imgsensor_name(v_fd);
-      if (strncmp(sensor, "ISX012", strlen("ISX012")) == 0)
+      if (strncmp(sensor, "OV3660", strlen("OV3660")) == 0)
+        {
+          /* OV3660 does not support JPEG still-capture; use only the
+           * RGB565X video stream prepared below.
+           */
+
+          skip_stillcapture = true;
+        }
+      else if (strncmp(sensor, "ISX012", strlen("ISX012")) == 0)
         {
           w = VIDEO_HSIZE_FULLHD;
           h = VIDEO_VSIZE_FULLHD;
@@ -616,7 +625,10 @@ int main(int argc, FAR char *argv[])
           w = VIDEO_HSIZE_QUADVGA;
           h = VIDEO_VSIZE_QUADVGA;
         }
+    }
 
+  if (capture_num != 0 && !skip_stillcapture)
+    {
       ret = camera_prepare(v_fd, V4L2_BUF_TYPE_STILL_CAPTURE,
                            V4L2_BUF_MODE_FIFO, V4L2_PIX_FMT_JPEG,
                            w, h,
@@ -643,7 +655,7 @@ int main(int argc, FAR char *argv[])
    */
 
   ret = camera_prepare(v_fd, V4L2_BUF_TYPE_VIDEO_CAPTURE,
-                       V4L2_BUF_MODE_RING, V4L2_PIX_FMT_RGB565,
+                       V4L2_BUF_MODE_RING, V4L2_PIX_FMT_RGB565X,
                        VIDEO_HSIZE_QVGA, VIDEO_VSIZE_QVGA,
                        &buffers_video, VIDEO_BUFNUM, IMAGE_RGB_SIZE,
                        &video_memory, &video_pixfmt);
