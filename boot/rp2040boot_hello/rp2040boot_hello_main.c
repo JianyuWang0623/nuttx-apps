@@ -83,7 +83,16 @@ int main(int argc, FAR char *argv[])
     }
 #endif
 
+  /* Emit a periodic heartbeat rather than a single line so a serial
+   * monitor attaching after boot still observes that the AP is running.
+   */
+
   syslog(LOG_INFO, "*** rp2040boot hello: AP is alive ***\n");
+  for (int i = 1; ; i++)
+    {
+      syslog(LOG_INFO, "*** rp2040boot hello: AP heartbeat #%d ***\n", i);
+      sleep(1);
+    }
 
   return 0;
 }
