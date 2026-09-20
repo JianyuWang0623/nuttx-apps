@@ -69,6 +69,37 @@ extern void rp2040_boot_jump(uint32_t msp, uint32_t reset);
  ****************************************************************************/
 
 /****************************************************************************
+ * Name: rp2040boot_elf_addr
+ *
+ * Description:
+ *   Translate a link-time address in a loaded ELF module to the address it
+ *   occupies now.  This mirrors the internal libelf_addr() helper (in
+ *   libs/libc/elf/elf.h), which is not exported through the public
+ *   <nuttx/lib/elf.h> header used by application code.  An address below
+ *   the data segment's link-time base belongs to text, anything at or
+ *   above it to data.
+ *
+ * Input Parameters:
+ *   loadinfo - Load state information
+ *   vaddr    - The link-time address to translate
+ *
+ * Returned Value:
+ *   The run-time address.
+ *
+ ****************************************************************************/
+
+static inline uintptr_t
+rp2040boot_elf_addr(FAR struct mod_loadinfo_s *loadinfo, uintptr_t vaddr)
+{
+  if (loadinfo->datasec != 0 && vaddr >= loadinfo->datasec)
+    {
+      return loadinfo->datastart + (vaddr - loadinfo->datasec);
+    }
+
+  return loadinfo->textalloc + vaddr;
+}
+
+/****************************************************************************
  * Name: verify_phdr
  *
  * Description:
@@ -380,7 +411,7 @@ int main(int argc, FAR char *argv[])
         goto errout;
       }
 
-    vt_addr = libelf_addr(&loadinfo, vsym.st_value);
+    vt_addr = rp2040boot_elf_addr(&loadinfo, vsym.st_value);
   }
 
   msp   = *(FAR uint32_t *)vt_addr;
