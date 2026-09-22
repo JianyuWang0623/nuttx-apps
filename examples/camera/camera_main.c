@@ -236,10 +236,17 @@ static int camera_prepare(int fd, enum v4l2_buf_type type,
 
           /* Note:
            * VIDIOC_QBUF set buffer pointer.
-           * Buffer pointer must be 32bytes aligned.
+           * The buffer pointer must satisfy the DMA alignment the
+           * driver requires.  Prefer the MMAP path above, where the
+           * driver allocates DMA-safe buffers itself; this USERPTR
+           * fallback is only taken when the driver cannot.  Use the
+           * largest cacheline alignment among supported platforms so a
+           * GDMA-driven capture into PSRAM (e.g. ESP32-S3) cannot write
+           * past the buffer and corrupt adjacent heap memory.
            */
 
-          (*vbuf)[cnt].start = memalign(32, buffersize);
+          (*vbuf)[cnt].start = memalign(CONFIG_EXAMPLES_CAMERA_BUF_ALIGN,
+                                        buffersize);
           if (!(*vbuf)[cnt].start)
             {
               printf("Out of memory for image buffer of %d/%d\n",

@@ -27,6 +27,18 @@ config EXAMPLES_CAMERA_STACKSIZE
 	int "Camera stack size"
 	default 2048
 
+config EXAMPLES_CAMERA_BUF_ALIGN
+	int "USERPTR capture buffer alignment (bytes)"
+	default 64 if ARCH_CHIP_ESP32S3
+	default 32
+	---help---
+		Alignment applied to USERPTR capture buffers allocated by this
+		example when the driver does not support MMAP.  It must meet the
+		DMA alignment the underlying capture path requires.  ESP32-S3
+		GDMA into PSRAM needs 64-byte alignment; a smaller value lets the
+		DMA engine write past the buffer and corrupt adjacent heap
+		memory.  Other platforms default to 32.
+
 config EXAMPLES_CAMERA_OUTPUT_LCD
 	bool "Output to LCD"
 	default n
