@@ -88,6 +88,9 @@ static int camera_prepare(int fd, enum v4l2_buf_type type,
                           uint8_t buffernum, int buffersize,
                           FAR uint32_t *memory,
                           FAR uint32_t *actual_fmt);
+static int camera_try_fmt(int fd, enum v4l2_buf_type type,
+                          uint32_t pixformat, uint16_t hsize,
+                          uint16_t vsize);
 static void free_buffer(FAR struct v_buffer *buffers, uint8_t bufnum);
 static int parse_arguments(int argc, FAR char *argv[],
                            FAR int *capture_num,
@@ -306,6 +309,33 @@ static int camera_prepare(int fd, enum v4l2_buf_type type,
 }
 
 /****************************************************************************
+ * Name: camera_try_fmt()
+ *
+ * Description:
+ *   Probe whether the driver accepts a capture format via VIDIOC_TRY_FMT
+ *   without changing device state.
+ *
+ ****************************************************************************/
+
+static int camera_try_fmt(int fd, enum v4l2_buf_type type,
+                          uint32_t pixformat, uint16_t hsize,
+                          uint16_t vsize)
+{
+  struct v4l2_format fmt =
+  {
+    0
+  };
+
+  fmt.type                = type;
+  fmt.fmt.pix.width       = hsize;
+  fmt.fmt.pix.height      = vsize;
+  fmt.fmt.pix.field       = V4L2_FIELD_ANY;
+  fmt.fmt.pix.pixelformat = pixformat;
+
+  return ioctl(fd, VIDIOC_TRY_FMT, (uintptr_t)&fmt);
+}
+
+/****************************************************************************
  * Name: free_buffer()
  *
  * Description:
@@ -511,7 +541,6 @@ int main(int argc, FAR char *argv[])
   uint16_t w;
   uint16_t h;
   int is_eternal;
-  bool skip_stillcapture = false;
   int app_state;
 
   struct timeval start;
@@ -609,15 +638,7 @@ int main(int argc, FAR char *argv[])
        */
 
       sensor = get_imgsensor_name(v_fd);
-      if (strncmp(sensor, "OV3660", strlen("OV3660")) == 0)
-        {
-          /* OV3660 does not support JPEG still-capture; use only the
-           * RGB565X video stream prepared below.
-           */
-
-          skip_stillcapture = true;
-        }
-      else if (strncmp(sensor, "ISX012", strlen("ISX012")) == 0)
+      if (strncmp(sensor, "ISX012", strlen("ISX012")) == 0)
         {
           w = VIDEO_HSIZE_FULLHD;
           h = VIDEO_VSIZE_FULLHD;
@@ -632,18 +653,25 @@ int main(int argc, FAR char *argv[])
           w = VIDEO_HSIZE_QUADVGA;
           h = VIDEO_VSIZE_QUADVGA;
         }
-    }
 
-  if (capture_num != 0 && !skip_stillcapture)
-    {
-      ret = camera_prepare(v_fd, V4L2_BUF_TYPE_STILL_CAPTURE,
-                           V4L2_BUF_MODE_FIFO, V4L2_PIX_FMT_JPEG,
-                           w, h,
-                           &buffers_still, STILL_BUFNUM, IMAGE_JPG_SIZE,
-                           &still_memory, NULL);
-      if (ret != OK)
+      /* Skip still-capture setup when the sensor rejects JPEG
+       * (VIDIOC_TRY_FMT fails), e.g. OV3660 which has no JPEG
+       * pipeline.  The video stream prepared below is enough then.
+       */
+
+      if (camera_try_fmt(v_fd, V4L2_BUF_TYPE_STILL_CAPTURE,
+                         V4L2_PIX_FMT_JPEG, w, h) == OK)
         {
-          goto exit_this_app;
+          ret = camera_prepare(v_fd, V4L2_BUF_TYPE_STILL_CAPTURE,
+                               V4L2_BUF_MODE_FIFO, V4L2_PIX_FMT_JPEG,
+                               w, h,
+                               &buffers_still, STILL_BUFNUM,
+                               IMAGE_JPG_SIZE,
+                               &still_memory, NULL);
+          if (ret != OK)
+            {
+              goto exit_this_app;
+            }
         }
     }
 
@@ -662,7 +690,7 @@ int main(int argc, FAR char *argv[])
    */
 
   ret = camera_prepare(v_fd, V4L2_BUF_TYPE_VIDEO_CAPTURE,
-                       V4L2_BUF_MODE_RING, V4L2_PIX_FMT_RGB565X,
+                       V4L2_BUF_MODE_RING, V4L2_PIX_FMT_RGB565,
                        VIDEO_HSIZE_QVGA, VIDEO_VSIZE_QVGA,
                        &buffers_video, VIDEO_BUFNUM, IMAGE_RGB_SIZE,
                        &video_memory, &video_pixfmt);
