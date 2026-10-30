@@ -33,6 +33,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <inttypes.h>
+#include <poll.h>
 #include <stdbool.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -68,6 +69,7 @@
 #define FASTBOOT_EP_BULKOUT_IDX     2
 #define FASTBOOT_EP_RETRY_TIMES     100
 #define FASTBOOT_EP_RETRY_DELAY_MS  10
+#define FASTBOOT_IO_TIMEOUT_MS      5000
 
 #define FASTBOOT_MSG_LEN            64
 
@@ -351,6 +353,31 @@ static ssize_t fastboot_read(int fd, FAR void *buf, size_t len)
   return r < 0 ? -errno : r;
 }
 
+static int fastboot_pollfd(int fd, short events)
+{
+  struct pollfd fds;
+  int ret;
+
+  for (; ; )
+    {
+      fds.fd      = fd;
+      fds.events  = events;
+      fds.revents = 0;
+      ret = poll(&fds, 1, FASTBOOT_IO_TIMEOUT_MS);
+      if (ret > 0)
+        {
+          return OK;
+        }
+
+      if (ret < 0 && errno == EINTR)
+        {
+          continue;
+        }
+
+      return ret < 0 ? -errno : -ETIMEDOUT;
+    }
+}
+
 static int fastboot_write(int fd, FAR const void *buf, size_t len)
 {
   FAR const char *data = buf;
@@ -361,6 +388,18 @@ static int fastboot_write(int fd, FAR const void *buf, size_t len)
 
       if (r < 0)
         {
+          if (errno == EAGAIN)
+            {
+              int ret = fastboot_pollfd(fd, POLLOUT);
+
+              if (ret == OK)
+                {
+                  continue;
+                }
+
+              return ret;
+            }
+
           return -errno;
         }
 
@@ -1343,6 +1382,18 @@ static ssize_t fastboot_read_all(int fd, FAR void *buf, size_t len)
   while (len > 0)
     {
       nread = fastboot_read(fd, buf, len);
+      if (nread == -EAGAIN)
+        {
+          int ret = fastboot_pollfd(fd, POLLIN);
+
+          if (ret == OK)
+            {
+              continue;
+            }
+
+          nread = ret;
+        }
+
       if (nread <= 0)
         {
           if (total == 0)
@@ -1420,7 +1471,11 @@ static ssize_t fastboot_framed_read(FAR struct fastboot_ctx_s *ctx,
   nread = fastboot_read(fd, buf, len);
   if (nread <= 0)
     {
-      ctx->left = 0;
+      if (nread != -EAGAIN)
+        {
+          ctx->left = 0;
+        }
+
       return nread;
     }
 
@@ -1476,6 +1531,7 @@ static void fastboot_tcp_disconn(FAR struct fastboot_ctx_s *ctx)
 {
   close(ctx->tran_fd[1]);
   ctx->tran_fd[1] = -1;
+  ctx->left = 0;
 }
 
 static void fastboot_tcp_deinit(FAR struct fastboot_ctx_s *ctx)
