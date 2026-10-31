@@ -273,8 +273,14 @@ static int option_restart_period(FAR struct service_manager_s *sm,
 {
   FAR struct service_s *s = list_last_entry(&sm->services, struct service_s,
                                             node);
+  int restart_period = atoi(argv[1]);
 
-  s->restart_period = atoi(argv[1]);
+  if (restart_period < 0)
+    {
+      return -EINVAL;
+    }
+
+  s->restart_period = restart_period;
   return 0;
 }
 
