@@ -28,8 +28,13 @@ ifneq ($(CONFIG_SYSTEM_TOYBOX),)
 
 TOYBOX_VERSION    := $(patsubst "%",%,$(strip $(CONFIG_SYSTEM_TOYBOX_VERSION)))
 TOYBOX_URL        := $(patsubst "%",%,$(strip $(CONFIG_SYSTEM_TOYBOX_URL)))
+TOYBOX_SHA256     := $(patsubst "%",%,$(strip $(CONFIG_SYSTEM_TOYBOX_SHA256)))
 TOYBOX_TARBALL    := $(TOYBOX_VERSION).tar.gz
 TOYBOX_UNPACKNAME := toybox
+# The fetch runs once per version (the stamp carries the version, like
+# .nuttx_patched-<version> in CMakeLists.txt): deleting the unpacked tree,
+# or changing TOYBOX_VERSION, fetches and unpacks again.
+TOYBOX_STAMP      := $(TOYBOX_UNPACKNAME)$(DELIM).nuttx_patched-$(TOYBOX_VERSION)
 
 WD := ${shell echo $(CURDIR) | sed -e 's/ /\\ /g'}
 
@@ -43,12 +48,23 @@ endif
 
 TOYBOX_PATCHES := $(sort $(wildcard $(WD)$(DELIM)patch$(DELIM)*.patch))
 
-$(TOYBOX_TARBALL):
-	$(ECHO_BEGIN)"Downloading: $(TOYBOX_TARBALL)"
-	$(Q) $(CURL) $(TOYBOX_TARBALL) $(TOYBOX_URL)/$(TOYBOX_TARBALL)
-	$(ECHO_END)
-
-$(TOYBOX_UNPACKNAME): $(TOYBOX_TARBALL)
+# Fetch with the same policy as the CMake build: with a hash pinned, a
+# present tarball is reused only when it verifies and re-downloaded when it
+# does not; with no hash pinned, it is always re-downloaded.
+$(TOYBOX_STAMP):
+	$(Q) if [ -n "$(TOYBOX_SHA256)" ] && [ -f $(TOYBOX_TARBALL) ] && \
+		$(CHECKHASH) sha256 $(TOYBOX_SHA256) $(TOYBOX_TARBALL) \
+		>/dev/null; then \
+		echo "Reusing: $(TOYBOX_TARBALL)"; \
+	else \
+		echo "Downloading: $(TOYBOX_TARBALL)"; \
+		rm -f $(TOYBOX_TARBALL); \
+		$(CURL) $(TOYBOX_TARBALL) $(TOYBOX_URL)/$(TOYBOX_TARBALL) || \
+			exit 1; \
+		if [ -n "$(TOYBOX_SHA256)" ]; then \
+			$(CHECKHASH) sha256 $(TOYBOX_SHA256) $(TOYBOX_TARBALL); \
+		fi; \
+	fi
 	$(ECHO_BEGIN)"Unpacking: $(TOYBOX_TARBALL) -> $(TOYBOX_UNPACKNAME)"
 	$(Q) $(UNPACK) $(TOYBOX_TARBALL)
 	$(Q) rm -rf $(TOYBOX_UNPACKNAME)
@@ -65,17 +81,17 @@ $(TOYBOX_UNPACKNAME): $(TOYBOX_TARBALL)
 	$(Q) $(foreach p, $(TOYBOX_PATCHES), \
 		echo "Applying: $(notdir $(p))"; \
 		$(PATCH) -s -N -p1 -d $(TOYBOX_UNPACKNAME) -i $(p) || exit 1;)
-	$(Q) touch $(TOYBOX_UNPACKNAME)
+	$(Q) touch $@
 
 # Regenerating headers is its own target, depending on $(TOPDIR)/.config as
-# well as the unpacked source: unlike download/unpack/patch (genuinely
+# well as the unpacked source: unlike fetch/unpack/patch (genuinely
 # one-time -- nothing above depends on *what* is selected, only that some
 # version is unpacked), which applets end up in generated/toyfiles.txt (and
 # so CSRCS) is a direct function of the "Toybox commands" Kconfig menu.
 # Without this as a separate, .config-dependent target, toggling a command
-# in menuconfig would have no effect: $(TOYBOX_UNPACKNAME) already exists,
+# in menuconfig would have no effect: $(TOYBOX_STAMP) already exists,
 # so its rule (and this regeneration) would never run again.
-$(TOYBOX_UNPACKNAME)/generated/toyfiles.txt: $(TOYBOX_UNPACKNAME) $(TOPDIR)$(DELIM).config
+$(TOYBOX_UNPACKNAME)/generated/toyfiles.txt: $(TOYBOX_STAMP) $(TOPDIR)$(DELIM).config
 	# Which applets to build is a Kconfig question (see Kconfig.commands,
 	# "Toybox commands" submenu), not a separately-maintained list: pull
 	# every enabled CONFIG_SYSTEM_TOYBOX_CMD_<NAME> straight out of NuttX's
