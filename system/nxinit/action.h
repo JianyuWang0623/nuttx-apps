@@ -94,6 +94,19 @@ struct action_manager_s
 
   FAR struct action_cmd_s *running;
   int pid_running;
+
+  /* "wait_for_prop" holds the command queue until a property event
+   * matches.  init_action_run_command() moves on only after the match
+   * has released the state below.
+   */
+
+  struct
+  {
+    bool active;
+    bool ready;
+    FAR char *name;
+    FAR char *value;
+  } wait_prop;
 #if defined(CONFIG_SYSTEM_NXINIT_ACTION_WARN_SLOW) && \
     CONFIG_SYSTEM_NXINIT_ACTION_WARN_SLOW > 0
   struct timespec time_run;

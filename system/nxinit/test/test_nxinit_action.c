@@ -49,6 +49,7 @@
 
 #include "../action.h"
 #include "../builtin.h"
+#include "../property.h"
 #include "test_nxinit.h"
 
 /****************************************************************************
@@ -655,4 +656,94 @@ void test_nxinit_action_builtin_wait(FAR void **state)
 #else
   skip();
 #endif
+}
+
+/****************************************************************************
+ * Name: test_nxinit_action_builtin_wait_for_prop
+ *
+ * Description:
+ *   "wait_for_prop" returns right away when the property already has
+ *   the value.  Otherwise it holds the command queue until a property
+ *   event matches exactly: other values keep it waiting, the match
+ *   runs the commands behind it, and a second waiter is refused.
+ ****************************************************************************/
+
+void test_nxinit_action_builtin_wait_for_prop(FAR void **state)
+{
+  FAR char *isset[] =
+    {
+      "wait_for_prop", "test.key", "ready", NULL
+    };
+
+  FAR char *pending[] =
+    {
+      "wait_for_prop", "test.pending", "never", NULL
+    };
+
+  FAR char *busy[] =
+    {
+      "wait_for_prop", "other.key", "value", NULL
+    };
+
+  struct action_manager_s am;
+  struct init_poller_s prop;
+  struct parser_s parser =
+    {
+      "on", init_action_parse, NULL, &am
+    };
+
+  char section[] = "on property:test.trigger=go";
+  char cmdwait[] = "  wait_for_prop test.key later";
+  char cmdset[] = "  set nxinit_wait_env done";
+
+  action_manager_init(&am);
+  memset(&prop, 0, sizeof(prop));
+  prop.am = &am;
+  assert_int_equal(init_property_init(&prop), 0);
+
+  /* A property that is already set returns right away */
+
+  assert_int_equal(init_property_set(&prop, "test.key", "ready"), 0);
+  assert_int_equal(init_builtin_run(&am, 3, isset), 0);
+  assert_false(am.wait_prop.active);
+
+  /* Otherwise the queue is held until an exact match */
+
+  assert_int_equal(init_action_parse(&parser, true, section), 0);
+  assert_int_equal(init_action_parse(&parser, false, cmdwait), 0);
+  assert_int_equal(init_action_parse(&parser, false, cmdset), 0);
+  assert_int_equal(init_property_set(&prop, "test.trigger", "go"), 0);
+  assert_true(action_manager_has_ready(&am));
+
+  assert_int_equal(init_action_run_command(&am), 0);
+  assert_true(am.wait_prop.active);
+  assert_int_equal(init_action_run_command(&am), INT_MAX);
+
+  assert_int_equal(init_property_set(&prop, "test.key", "other"), 0);
+  assert_int_equal(init_action_run_command(&am), INT_MAX);
+
+  assert_int_equal(init_property_set(&prop, "test.key", "later"), 0);
+  assert_int_equal(init_action_run_command(&am), 0);
+  assert_false(am.wait_prop.active);
+
+  assert_int_equal(init_action_run_command(&am), 0);
+  assert_string_equal(getenv("nxinit_wait_env"), "done");
+  assert_int_equal(init_action_run_command(&am), INT_MAX);
+
+  /* A second waiter is refused while one is active */
+
+  assert_int_equal(init_builtin_run(&am, 3, pending), 0);
+  assert_true(am.wait_prop.active);
+  assert_int_equal(init_builtin_run(&am, 3, busy), -EBUSY);
+
+  /* Release the waiter that has no action behind it */
+
+  am.wait_prop.active = false;
+  free(am.wait_prop.name);
+  free(am.wait_prop.value);
+  am.wait_prop.name = NULL;
+  am.wait_prop.value = NULL;
+
+  action_manager_free_all(&am);
+  init_property_deinit(&prop);
 }

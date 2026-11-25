@@ -46,4 +46,6 @@ void init_property_deinit(FAR struct init_poller_s *ctx);
 int  init_property_init(FAR struct init_poller_s *ctx);
 int  init_property_set(FAR struct init_poller_s *ctx,
                        FAR const char *key, FAR const char *value);
+int  init_property_get(FAR struct init_poller_s *ctx,
+                       FAR const char *key, FAR char *value, size_t len);
 #endif /* __APPS_SYSTEM_NXINIT_PROPERTY_H */

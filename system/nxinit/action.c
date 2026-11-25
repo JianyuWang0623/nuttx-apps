@@ -346,6 +346,13 @@ void init_action_trigger_event(FAR struct action_manager_s *am,
 {
   struct event_arg_s arg;
 
+  if (am->wait_prop.active && !am->wait_prop.ready &&
+      !strcmp(am->wait_prop.name, key) &&
+      !strcmp(am->wait_prop.value, value))
+    {
+      am->wait_prop.ready = true;
+    }
+
   arg.key = key;
   arg.value = value;
   init_action_foreach_event(am, event_callback, &arg);
@@ -375,6 +382,23 @@ int init_action_run_command(FAR struct action_manager_s *am)
 {
   FAR struct action_s *ready;
   int ret;
+
+  if (am->wait_prop.active)
+    {
+      if (!am->wait_prop.ready)
+        {
+          return INT_MAX;
+        }
+
+      free(am->wait_prop.name);
+      free(am->wait_prop.value);
+      am->wait_prop.name = NULL;
+      am->wait_prop.value = NULL;
+      am->wait_prop.active = false;
+      am->wait_prop.ready = false;
+      init_action_reap_command(am, 0);
+      return 0;
+    }
 
   if (am->pid_running != -1)
     {
@@ -415,7 +439,7 @@ int init_action_run_command(FAR struct action_manager_s *am)
     {
       am->pid_running = ret;
     }
-  else
+  else if (!am->wait_prop.active)
     {
       init_action_reap_command(am, ret);
     }

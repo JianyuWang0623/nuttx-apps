@@ -130,6 +130,8 @@ static int cmd_unlink(FAR struct action_manager_s *am,
                       int argc, FAR char **argv);
 static int cmd_wait(FAR struct action_manager_s *am,
                     int argc, FAR char **argv);
+static int cmd_wait_for_prop(FAR struct action_manager_s *am,
+                             int argc, FAR char **argv);
 #ifndef CONFIG_DISABLE_MOUNTPOINT
 static int cmd_mount(FAR struct action_manager_s *am,
                      int argc, FAR char **argv);
@@ -200,6 +202,7 @@ static const struct cmd_map_s g_builtin[] =
 #endif
   {"unlink", 2, 2, cmd_unlink},
   {"wait", 2, 3, cmd_wait},
+  {"wait_for_prop", 3, 3, cmd_wait_for_prop},
 };
 
 /****************************************************************************
@@ -546,6 +549,64 @@ static int cmd_wait(FAR struct action_manager_s *am,
 
       usleep(10 * 1000);
     }
+}
+
+/* wait_for_prop <name> <value>
+ *
+ * Return when the property <name> is exactly <value>, as the Android
+ * init command of the same name.  A property that is already set
+ * returns right away.  Otherwise the action queue is held until a
+ * property event matches, so services and property pollers still run
+ * while it waits, and a later "setprop" in the same queue cannot.
+ */
+
+static int cmd_wait_for_prop(FAR struct action_manager_s *am,
+                             int argc, FAR char **argv)
+{
+  FAR char *value;
+  size_t len;
+  int ret;
+
+  if (am->wait_prop.active)
+    {
+      init_err("wait_for_prop: already waiting for '%s'",
+               am->wait_prop.name);
+      return -EBUSY;
+    }
+
+  len = strlen(argv[2]) + 1;
+  value = malloc(len);
+  if (value == NULL)
+    {
+      return -ENOMEM;
+    }
+
+  ret = init_property_get(am->prop, argv[1], value, len);
+  if (ret == 0 && !strcmp(value, argv[2]))
+    {
+      free(value);
+      init_info("wait_for_prop: '%s' is already '%s'", argv[1], argv[2]);
+      return 0;
+    }
+
+  free(value);
+
+  am->wait_prop.name = strdup(argv[1]);
+  am->wait_prop.value = strdup(argv[2]);
+  if (am->wait_prop.name == NULL || am->wait_prop.value == NULL)
+    {
+      free(am->wait_prop.name);
+      free(am->wait_prop.value);
+      am->wait_prop.name = NULL;
+      am->wait_prop.value = NULL;
+      return -ENOMEM;
+    }
+
+  am->wait_prop.active = true;
+  am->wait_prop.ready = false;
+  init_info("wait_for_prop: waiting for '%s' to be '%s'",
+            argv[1], argv[2]);
+  return 0;
 }
 
 #ifndef CONFIG_DISABLE_MOUNTPOINT
